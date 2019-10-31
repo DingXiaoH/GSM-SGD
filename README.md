@@ -1,6 +1,49 @@
-# GSM-SGD
-Global Sparse Momentum SGD for pruning very deep neural networks
+# Global Sparse Momentum SGD
 
-Accepted to NeurIPS-2019.
+This repository contains the codes for the following NeurIPS-2019 paper 
 
-Will be released in a month.
+[Global Sparse Momentum SGD for Pruning Very Deep Neural Networks](https://arxiv.org/pdf/1909.12778.pdf).
+
+The codes are based on PyTorch 1.1.
+
+The experiments reported in the paper were performed using Tensorflow. However, the backbone of the codes was refactored from the official Tensorflow benchmark (https://github.com/tensorflow/benchmarks/tree/master/scripts/tf_cnn_benchmarks), which was designed in the pursuit of extreme speed, not readability.
+
+Citation:
+
+	@article{ding2019global,
+  title={Global Sparse Momentum SGD for Pruning Very Deep Neural Networks},
+  author={Ding, Xiaohan and Ding, Guiguang and Zhou, Xiangxin and Guo, Yuchen and Liu, Ji and Han, Jungong},
+  journal={arXiv preprint arXiv:1909.12778},
+  year={2019}
+  }
+
+## Abstract
+
+Deep Neural Network (DNN) is powerful but computationally expensive and memory intensive, thus impeding its practical usage on resource-constrained front-end devices. DNN pruning is an approach for deep model compression, which aims at eliminating some parameters with tolerable performance degradation. In this paper, we propose a novel momentum-SGD-based optimization method to reduce the network complexity by on-the-fly pruning. Concretely, given a global compression ratio, we categorize all the parameters into two parts at each training iteration which are updated using different rules. In this way, we gradually zero out the redundant parameters, as we update them using only the ordinary weight decay but no gradients derived from the objective function. As a departure from prior methods that require heavy human works to tune the layer-wise sparsity ratios, prune by solving complicated non-differentiable problems or finetune the model after pruning, our method is characterized by 1) global compression that automatically finds the appropriate per-layer sparsity ratios; 2) end-to-end training; 3) no need for a time-consuming re-training process after pruning; and 4) superior capability to find better winning tickets which win the initialization lottery.
+
+## Example Usage
+  
+This repo holds the example codes for the experiments of finding the winning lottery tickets [Frankle, J., & Carbin, M. (2018). The lottery ticket hypothesis: Finding sparse, trainable neural networks. arXiv preprint arXiv:1803.03635.] by GSM.
+
+1. Install PyTorch 1.1
+
+2. Train a LeNet-5 on MNIST, find the winning tickets by magnitude or by GSM, and train the tickets.
+```
+python gsm/gsm_lottery_ticket_lenet5.py
+```
+3. Check the accuracy of winning tickets training.
+```
+cat gsm_lottery_ticket_exps/lottery_lenet5_warmup5_compress300_magnitude_retrain/log.txt
+cat gsm_lottery_ticket_exps/lottery_lenet5_warmup5_compress300_gsm_retrain/log.txt
+```
+
+
+## TODOs. 
+1. Test the codes thoroughly. There may be some bugs due to my misunderstanding of PyTorch (especially the codes of calculating, transforming and applying gradients).
+2. Support more networks.
+
+
+## Contact
+dxh17@mails.tsinghua.edu.cn
+
+Google Scholar Profile: https://scholar.google.com/citations?user=CIjw0KoAAAAJ&hl=en
