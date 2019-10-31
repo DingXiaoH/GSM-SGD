@@ -11,11 +11,11 @@ The experiments reported in the paper were performed using Tensorflow. However, 
 Citation:
 
 	@article{ding2019global,
-  title={Global Sparse Momentum SGD for Pruning Very Deep Neural Networks},
-  author={Ding, Xiaohan and Ding, Guiguang and Zhou, Xiangxin and Guo, Yuchen and Liu, Ji and Han, Jungong},
-  journal={arXiv preprint arXiv:1909.12778},
-  year={2019}
-  }
+  	title={Global Sparse Momentum SGD for Pruning Very Deep Neural Networks},
+  	author={Ding, Xiaohan and Ding, Guiguang and Zhou, Xiangxin and Guo, Yuchen and Liu, Ji and Han, Jungong},
+  	journal={arXiv preprint arXiv:1909.12778},
+  	year={2019}
+  	}
 
 ## Abstract
 
