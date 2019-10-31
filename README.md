@@ -1,5 +1,7 @@
 # Global Sparse Momentum SGD
 
+The WIFI of hotel is killing me. I cannot push codes. Will be released when I get back to Beijing from ICCV.
+
 This repository contains the codes for the following NeurIPS-2019 paper 
 
 [Global Sparse Momentum SGD for Pruning Very Deep Neural Networks](https://arxiv.org/pdf/1909.12778.pdf).
