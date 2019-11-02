@@ -1,7 +1,5 @@
 # Global Sparse Momentum SGD
 
-The WIFI of hotel is killing me. I cannot push codes. Will be released when I get back to Beijing from ICCV.
-
 This repository contains the codes for the following NeurIPS-2019 paper 
 
 [Global Sparse Momentum SGD for Pruning Very Deep Neural Networks](https://arxiv.org/pdf/1909.12778.pdf).
@@ -41,7 +39,7 @@ cat gsm_lottery_ticket_exps/lottery_lenet5_warmup5_compress300_gsm_retrain/log.t
 
 
 ## TODOs. 
-1. Test the codes thoroughly. There may be some bugs due to my misunderstanding of PyTorch (especially the codes of calculating, transforming and applying gradients).
+1. Test the codes thoroughly. There may be some bugs due to my misunderstanding of PyTorch (especially the codes of calculating, transforming and applying gradients). There is also a gap between the results and those reported in the paper using Tensorflow. Learning rate warmup may be the cause. But it is still clear that GSM finds better winning tickets than magnitude-pruning.
 2. Support more networks.
 
 
