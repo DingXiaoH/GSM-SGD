@@ -12,8 +12,8 @@ gsm_lr_boundaries = [160, 200, 240]
 gsm_momentum = 0.99
 gsm_max_epochs = 280
 
-def gsm_lottery_ticket_lenet5(compress_ratio):
-    network_type = 'lenet5'
+def gsm_lottery_ticket_lenet300(compress_ratio):
+    network_type = 'lenet300'
     dataset_name = 'mnist'
     weight_decay_strength = 5e-4
     batch_size = 256
@@ -48,4 +48,4 @@ def gsm_lottery_ticket_lenet5(compress_ratio):
 
 
 if __name__ == '__main__':
-    gsm_lottery_ticket_lenet5(int(sys.argv[1]))
+    gsm_lottery_ticket_lenet300(int(sys.argv[1]))

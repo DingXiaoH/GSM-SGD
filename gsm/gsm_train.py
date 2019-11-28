@@ -14,10 +14,17 @@ import time
 from builder import ConvBuilder
 from utils.lr_scheduler import WarmupMultiStepLR, WarmupLinearLR
 import os
+from pytorchsummary import summary
 
 SPEED_TEST_SAMPLE_IGNORE_RATIO = 0.5
 TRAIN_SPEED_START = 0.1
 TRAIN_SPEED_END = 0.2
+
+# try:
+#     from apex.parallel.distributed import DistributedDataParallel
+#     from apex import amp
+# except ImportError:
+#     raise ImportError('Use APEX for multi-precision via apex.amp')
 
 def train_one_step(net, data, label, optimizer, criterion, nonzero_ratio):
     pred = net(data)
@@ -103,8 +110,7 @@ def run_eval(ds_val, max_iters, net, criterion, discrip_str, dataset_name):
     return reduced_metirc_dic, total_net_time
 
 
-
-def sgd_optimizer(cfg, model):
+def sgd_optimizer(cfg, model, no_l2_keywords, use_nesterov):
     params = []
     for key, value in model.named_parameters():
         if not value.requires_grad:
@@ -115,12 +121,16 @@ def sgd_optimizer(cfg, model):
             # lr = cfg.SOLVER.BASE_LR * cfg.SOLVER.BIAS_LR_FACTOR
             weight_decay = cfg.weight_decay_bias
             print('set weight_decay_bias={} for {}'.format(weight_decay, key))
+        for kw in no_l2_keywords:
+            if kw in key:
+                weight_decay = 0
+                print('NOTICE! weight decay = 0 for ', key)
         params += [{"params": [value], "lr": lr, "weight_decay": weight_decay}]
-    optimizer = torch.optim.SGD(params, lr, momentum=cfg.momentum)
+    optimizer = torch.optim.SGD(params, lr, momentum=cfg.momentum, nesterov=use_nesterov)
     return optimizer
 
-def get_optimizer(cfg, model):
-    return sgd_optimizer(cfg, model)
+def get_optimizer(cfg, model, no_l2_keywords, use_nesterov):
+    return sgd_optimizer(cfg, model, no_l2_keywords=no_l2_keywords, use_nesterov=use_nesterov)
 
 def get_criterion(cfg):
     return CrossEntropyLoss()
@@ -147,13 +157,13 @@ def get_lr_scheduler(cfg, optimizer):
 
 
 def gsm_train(cfg:BaseConfigByEpoch, net=None, train_dataloader=None, val_dataloader=None, show_variables=False, convbuilder=None, beginning_msg=None,
-               init_hdf5=None, nonzero_ratio=0):
+               init_hdf5=None, nonzero_ratio=0, use_nesterov=False):
 
     ensure_dir(cfg.output_dir)
     ensure_dir(cfg.tb_dir)
     with Engine() as engine:
 
-        is_main_process = (engine.world_rank == 0)
+        is_main_process = (engine.world_rank == 0) #TODO correct?
 
         logger = engine.setup_log(
             name='train', log_dir=cfg.output_dir, file_name='log.txt')
@@ -170,7 +180,7 @@ def gsm_train(cfg:BaseConfigByEpoch, net=None, train_dataloader=None, val_datalo
         if train_dataloader is None:
             train_dataloader = create_dataset(cfg.dataset_name, cfg.dataset_subset, cfg.global_batch_size)
         if cfg.val_epoch_period > 0 and val_dataloader is None:
-            val_dataloader = create_dataset(cfg.dataset_name, 'val', batch_size=100)
+            val_dataloader = create_dataset(cfg.dataset_name, 'val', batch_size=100)    #TODO 100?
 
         print('NOTE: Data prepared')
         print('NOTE: We have global_batch_size={} on {} GPUs, the allocated GPU memory is {}'.format(cfg.global_batch_size, torch.cuda.device_count(), torch.cuda.memory_allocated()))
@@ -179,7 +189,7 @@ def gsm_train(cfg:BaseConfigByEpoch, net=None, train_dataloader=None, val_datalo
         # model.to(device)
         # model.cuda()
 
-        optimizer = get_optimizer(cfg, model)
+        optimizer = get_optimizer(cfg, model, no_l2_keywords=[], use_nesterov=use_nesterov)
         scheduler = get_lr_scheduler(cfg, optimizer)
         criterion = get_criterion(cfg).cuda()
 
@@ -199,7 +209,7 @@ def gsm_train(cfg:BaseConfigByEpoch, net=None, train_dataloader=None, val_datalo
             model = torch.nn.parallel.DataParallel(model)
 
         if cfg.init_weights:
-            engine.load_checkpoint(cfg.init_weights, is_restore=True)
+            engine.load_checkpoint(cfg.init_weights)
 
         if init_hdf5:
             engine.load_hdf5(init_hdf5)
@@ -225,6 +235,8 @@ def gsm_train(cfg:BaseConfigByEpoch, net=None, train_dataloader=None, val_datalo
         done_epochs = iteration // iters_per_epoch
 
         engine.save_hdf5(os.path.join(cfg.output_dir, 'init.hdf5'))
+
+        # summary(model=model, input_size=(224, 224) if cfg.dataset_name == 'imagenet' else (32, 32), batch_size=cfg.global_batch_size)
 
         recorded_train_time = 0
         recorded_train_examples = 0
@@ -256,6 +268,7 @@ def gsm_train(cfg:BaseConfigByEpoch, net=None, train_dataloader=None, val_datalo
                 start_time = time.time()
                 data, label = load_cuda_data(train_dataloader, cfg.dataset_name)
                 data_time = time.time() - start_time
+
 
                 train_net_time_start = time.time()
                 acc, acc5, loss = train_one_step(model, data, label, optimizer, criterion, nonzero_ratio=nonzero_ratio)
@@ -307,3 +320,18 @@ def gsm_train(cfg:BaseConfigByEpoch, net=None, train_dataloader=None, val_datalo
         if cfg.save_weights:
             engine.save_checkpoint(cfg.save_weights)
             print('NOTE: training finished, saved to {}'.format(cfg.save_weights))
+
+
+
+
+
+            # if engine.world_rank == 0:
+            #     if iteration % 20 == 0 or iteration == max_iter:
+            #         # loss_dict = reducke_loss_dict(loss_dict)
+            #         log_str = 'it:%d, lr:%.1e, ' % (
+            #             iteration, optimizer.param_groups[0]["lr"])
+            #         for key in loss_dict:
+            #             tb_writer.add_scalar(
+            #                 key, loss_dict[key].mean(), global_step=iteration)
+            #             log_str += key + ': %.3f, ' % float(loss_dict[key])
+            #         logger.info(log_str)

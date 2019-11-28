@@ -29,5 +29,28 @@ class LeNet5(nn.Module):
         return out
 
 
+class LeNet300(nn.Module):
+
+    def __init__(self, builder:ConvBuilder):
+        super(LeNet300, self).__init__()
+        self.flatten = builder.Flatten()
+        self.linear1 = builder.Linear(in_features=28*28, out_features=300, bias=True)
+        self.relu1 = builder.ReLU()
+        self.linear2 = builder.Linear(in_features=300, out_features=100, bias=True)
+        self.relu2 = builder.ReLU()
+        self.linear3 = builder.Linear(in_features=100, out_features=10, bias=True)
+
+    def forward(self, x):
+        out = self.flatten(x)
+        out = self.linear1(out)
+        out = self.relu1(out)
+        out = self.linear2(out)
+        out = self.relu2(out)
+        out = self.linear3(out)
+        return out
+
 def create_lenet5(cfg, builder):
     return LeNet5(builder=builder, deps=cfg.deps)
+
+def create_lenet300(cfg, builder):
+    return LeNet300(builder=builder)

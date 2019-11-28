@@ -1,6 +1,6 @@
 # Copyright (c) Facebook, Inc. and its affiliates. All Rights Reserved.
 from bisect import bisect_right
-
+from dataset import num_iters_per_epoch
 import torch
 
 
@@ -99,3 +99,20 @@ class WarmupLinearLR(torch.optim.lr_scheduler._LRScheduler):
                             self.final_iters - self.warmup_iters)
                 for base_lr in self.base_lrs
             ]
+
+#   LR scheduler should work according the number of iterations
+def get_lr_scheduler(cfg, optimizer):
+    it_ep = num_iters_per_epoch(cfg)
+    if cfg.linear_final_lr is None:
+        lr_iter_boundaries = [it_ep * ep for ep in cfg.lr_epoch_boundaries]
+        return WarmupMultiStepLR(
+            optimizer, lr_iter_boundaries, cfg.lr_decay_factor,
+            warmup_factor=cfg.warmup_factor,
+            warmup_iters=cfg.warmup_epochs * it_ep,
+            warmup_method=cfg.warmup_method, )
+    else:
+        return WarmupLinearLR(optimizer, final_lr=cfg.linear_final_lr,
+                              final_iters=cfg.max_epochs * it_ep,
+                              warmup_factor=cfg.warmup_factor,
+                              warmup_iters=cfg.warmup_epochs * it_ep,
+                              warmup_method=cfg.warmup_method,)

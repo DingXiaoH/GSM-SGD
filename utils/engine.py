@@ -13,6 +13,12 @@ from utils.logger import get_logger
 
 from utils.checkpoint import load_model
 from utils.misc import save_hdf5, read_hdf5
+import numpy as np
+
+from collections import namedtuple
+
+NamedParamValue = namedtuple('NamedParamValue', ['name', 'value'])
+
 
 class State(object):
     def __init__(self):
@@ -20,10 +26,11 @@ class State(object):
         self.model = None
         self.optimizer = None
         self.scheduler = None
+        self.cfg = None
 
     def register(self, **kwargs):
         for k, v in kwargs.items():
-            assert k in ['iteration', 'model', 'optimizer', 'scheduler']
+            assert k in ['iteration', 'model', 'optimizer', 'scheduler', 'cfg']
             setattr(self, k, v)
 
 
@@ -35,7 +42,6 @@ class Engine(object):
         self.devices = None
         self.distributed = False
         self.logger = None
-
 
         if 'WORLD_SIZE' in os.environ:
             self.distributed = int(os.environ['WORLD_SIZE']) >= 1
@@ -85,13 +91,11 @@ class Engine(object):
     def update_iteration(self, iteration):
         self.state.iteration = iteration
 
-
     def show_variables(self):
         print('---------- show variables -------------')
         for k, v in self.state.model.state_dict().items():
             print(k, v.shape)
         print('--------------------------------------')
-
 
     def save_hdf5(self, path):
         save_dict = {}
@@ -103,19 +107,33 @@ class Engine(object):
             np_array = v.cpu().numpy()
             save_dict[key] = np_array
             num_params += np_array.size
+        if self.state.cfg is not None and self.state.cfg.deps is not None:
+            save_dict['deps'] = self.state.cfg.deps
         save_hdf5(save_dict, path)
         print('---------------saved {} numpy arrays to {}---------------'.format(len(save_dict), path))
         self.log('num of params in hdf5={}'.format(num_params))
 
+    def set_value(self, param, value):
+        assert tuple(param.size()) == tuple(value.shape)
+        param.data = torch.from_numpy(value).cuda().type(torch.cuda.FloatTensor)
+
     def load_hdf5(self, path):
         hdf5_dict = read_hdf5(path)
         assigned_params = 0
-        params = self.state.model.named_parameters()
-        for k, v in params:
+        for k, v in self.state.model.named_parameters():
             if k in hdf5_dict:
-                v.data = torch.from_numpy(hdf5_dict[k]).cuda()
+                print('assign {} from hdf5'.format(k))
+                self.set_value(v, hdf5_dict[k])
+            else:
+                print('param {} not found in hdf5'.format(k))
+        for k, v in self.state.model.named_buffers():
+            if k in hdf5_dict:
+                self.set_value(v, hdf5_dict[k])
+            else:
+                print('buffer {} not found in hdf5'.format(k))
             assigned_params += 1
         print('Assigned {} params from hdf5: {}'.format(assigned_params, path))
+
 
 
 
@@ -157,7 +175,7 @@ class Engine(object):
         #     "Time usage:\n\tprepare snapshot: {}, IO: {}".format(
         #         path, t_io_begin - t_start, t_end - t_io_begin))
 
-    def load_checkpoint(self, weights, is_restore=False, just_weights=False):
+    def load_checkpoint(self, weights, just_weights=False):
 
         t_start = time.time()
 
@@ -168,8 +186,7 @@ class Engine(object):
             loaded = dict(model=loaded)
 
         self.state.model = load_model(
-            self.state.model, loaded['model'], self.logger,
-            is_restore=is_restore)
+            self.state.model, loaded['model'], self.logger)
 
         if not just_weights:
             if "optimizer" in loaded:
@@ -200,6 +217,40 @@ class Engine(object):
 
     # def restore_checkpoint(self):
     #     self.load_checkpoint(self.continue_state_object, is_restore=True)
+
+    def get_all_conv_kernel_namedvalue_as_list(self):
+        result = []
+        for k, v in self.state.model.state_dict().items():
+            if v.dim() == 4:
+                result.append(NamedParamValue(name=k, value=v.cpu().numpy()))
+        return result
+
+    def get_all_kernel_namedvalue_as_list(self):
+        result = []
+        for k, v in self.state.model.state_dict().items():
+            if v.dim() in [2, 4]:
+                result.append(NamedParamValue(name=k, value=v.cpu().numpy()))
+        return result
+
+    def get_param_value_by_name(self, name):
+        state_dict = self.state.model.state_dict()
+        if name not in state_dict:
+            return None
+        else:
+            return state_dict[name].cpu().numpy()
+
+    def state_values(self):
+        result = OrderedDict()
+        for k, v in self.state.model.state_dict().items():
+            result[k] = v.cpu().numpy()
+        return result
+
+
+
+
+
+
+
 
     def log(self, msg):
         self.logger.info(msg)

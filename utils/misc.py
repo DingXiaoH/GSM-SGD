@@ -6,6 +6,22 @@ import sys
 import json
 import h5py
 import numpy as np
+import time
+
+def cur_time():
+    return time.strftime('%Y,%b,%d,%X')
+
+def log_important(message, log_file):
+    print(message, cur_time())
+    with open(log_file, 'a') as f:
+        print(message, cur_time(), file=f)
+
+def extract_deps_from_weights_file(file_path):
+    weight_dic = read_hdf5(file_path)
+    if 'deps' in weight_dic:
+        return weight_dic['deps']
+    else:
+        return None
 
 def representsInt(s):
     try:

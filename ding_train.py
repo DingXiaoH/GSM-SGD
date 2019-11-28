@@ -1,23 +1,24 @@
 from torch.utils.tensorboard import SummaryWriter
 from base_config import BaseConfigByEpoch
 from model_map import get_model_fn
-from dataset import create_dataset, num_train_examples_per_epoch
+from dataset import create_dataset, load_cuda_data, num_iters_per_epoch
 from torch.nn.modules.loss import CrossEntropyLoss
 from utils.engine import Engine
 from utils.pyt_utils import ensure_dir
 from utils.misc import torch_accuracy, AvgMeter
-from utils.comm import reduce_loss_dict
 from collections import OrderedDict
 import torch
 from tqdm import tqdm
 import time
 from builder import ConvBuilder
-from utils.lr_scheduler import WarmupMultiStepLR, WarmupLinearLR
+from utils.lr_scheduler import get_lr_scheduler
 import os
+from ding_test import run_eval
 
-SPEED_TEST_SAMPLE_IGNORE_RATIO = 0.5
 TRAIN_SPEED_START = 0.1
 TRAIN_SPEED_END = 0.2
+
+COLLECT_TRAIN_LOSS_EPOCHS = 10
 
 # try:
 #     from apex.parallel.distributed import DistributedDataParallel
@@ -40,61 +41,7 @@ def train_one_step(net, data, label, optimizer, criterion, if_accum_grad = False
     return acc, acc5, loss
 
 
-def load_cuda_data(data_loader, dataset_name):
-    if dataset_name == 'imagenet':
-        data_dict = next(data_loader)
-        data = data_dict['data']
-        label = data_dict['label']
-        data = torch.from_numpy(data).cuda()
-        label = torch.from_numpy(label).type(torch.long).cuda()
-    else:
-        data, label = next(data_loader)
-        data = data.cuda()
-        label = label.cuda()
-    return data, label
-
-def run_eval(ds_val, max_iters, net, criterion, discrip_str, dataset_name):
-    pbar = tqdm(range(max_iters))
-    top1 = AvgMeter()
-    top5 = AvgMeter()
-    losses = AvgMeter()
-    pbar.set_description('Validation' + discrip_str)
-    total_net_time = 0
-    with torch.no_grad():
-        for iter_idx, i in enumerate(pbar):
-            start_time = time.time()
-            data, label = load_cuda_data(ds_val, dataset_name=dataset_name)
-            data_time = time.time() - start_time
-
-            net_time_start = time.time()
-            pred = net(data)
-            net_time_end = time.time()
-
-            if iter_idx >= SPEED_TEST_SAMPLE_IGNORE_RATIO * max_iters:
-                total_net_time += net_time_end - net_time_start
-
-            loss = criterion(pred, label)
-            acc, acc5 = torch_accuracy(pred, label, (1, 5))
-
-            top1.update(acc.item())
-            top5.update(acc5.item())
-            losses.update(loss.item())
-            pbar_dic = OrderedDict()
-            pbar_dic['data-time'] = '{:.2f}'.format(data_time)
-            pbar_dic['top1'] = '{:.5f}'.format(top1.mean)
-            pbar_dic['top5'] = '{:.5f}'.format(top5.mean)
-            pbar_dic['loss'] = '{:.5f}'.format(losses.mean)
-            pbar.set_postfix(pbar_dic)
-
-    metric_dic = {'top1':torch.tensor(top1.mean),
-                  'top5':torch.tensor(top5.mean),
-                  'loss':torch.tensor(losses.mean)}
-    reduced_metirc_dic = reduce_loss_dict(metric_dic)
-    # reduced_metirc_dic = my_reduce_dic(metric_dic)
-    return reduced_metirc_dic, total_net_time
-
-
-def sgd_optimizer(cfg, model, no_l2_keywords):
+def sgd_optimizer(cfg, model, no_l2_keywords, use_nesterov):
     params = []
     for key, value in model.named_parameters():
         if not value.requires_grad:
@@ -109,39 +56,24 @@ def sgd_optimizer(cfg, model, no_l2_keywords):
             if kw in key:
                 weight_decay = 0
                 print('NOTICE! weight decay = 0 for ', key)
-        params += [{"params": [value], "lr": lr, "weight_decay": weight_decay}]
-    optimizer = torch.optim.SGD(params, lr, momentum=cfg.momentum)
+        if 'bias' in key:
+            apply_lr = 2 * lr
+        else:
+            apply_lr = lr
+        params += [{"params": [value], "lr": apply_lr, "weight_decay": weight_decay}]
+    # optimizer = torch.optim.Adam(params, lr)
+    optimizer = torch.optim.SGD(params, lr, momentum=cfg.momentum, nesterov=use_nesterov)
     return optimizer
 
-def get_optimizer(cfg, model, no_l2_keywords):
-    return sgd_optimizer(cfg, model, no_l2_keywords)
+def get_optimizer(cfg, model, no_l2_keywords, use_nesterov=False):
+    return sgd_optimizer(cfg, model, no_l2_keywords, use_nesterov=use_nesterov)
 
 def get_criterion(cfg):
     return CrossEntropyLoss()
 
-def num_iters_per_epoch(cfg):
-    return num_train_examples_per_epoch(cfg.dataset_name) // cfg.global_batch_size
-
-#   LR scheduler should work according the number of iterations
-def get_lr_scheduler(cfg, optimizer):
-    it_ep = num_iters_per_epoch(cfg)
-    if cfg.linear_final_lr is None:
-        lr_iter_boundaries = [it_ep * ep for ep in cfg.lr_epoch_boundaries]
-        return WarmupMultiStepLR(
-            optimizer, lr_iter_boundaries, cfg.lr_decay_factor,
-            warmup_factor=cfg.warmup_factor,
-            warmup_iters=cfg.warmup_epochs * it_ep,
-            warmup_method=cfg.warmup_method, )
-    else:
-        return WarmupLinearLR(optimizer, final_lr=cfg.linear_final_lr,
-                              final_iters=cfg.max_epochs * it_ep,
-                              warmup_factor=cfg.warmup_factor,
-                              warmup_iters=cfg.warmup_epochs * it_ep,
-                              warmup_method=cfg.warmup_method,)
-
 
 def ding_train(cfg:BaseConfigByEpoch, net=None, train_dataloader=None, val_dataloader=None, show_variables=False, convbuilder=None, beginning_msg=None,
-               init_hdf5=None, no_l2_keywords=None, gradient_mask=None):
+               init_hdf5=None, no_l2_keywords=None, gradient_mask=None, use_nesterov=False, tensorflow_style_init=False):
 
     # LOCAL_RANK = 0
     #
@@ -183,20 +115,17 @@ def ding_train(cfg:BaseConfigByEpoch, net=None, train_dataloader=None, val_datal
         print('NOTE: Data prepared')
         print('NOTE: We have global_batch_size={} on {} GPUs, the allocated GPU memory is {}'.format(cfg.global_batch_size, torch.cuda.device_count(), torch.cuda.memory_allocated()))
 
-        # device = torch.device(cfg.device)
-        # model.to(device)
-        # model.cuda()
-
         if no_l2_keywords is None:
             no_l2_keywords = []
-        optimizer = get_optimizer(cfg, model, no_l2_keywords=no_l2_keywords)
+
+        optimizer = get_optimizer(cfg, model, no_l2_keywords=no_l2_keywords, use_nesterov=use_nesterov)
         scheduler = get_lr_scheduler(cfg, optimizer)
         criterion = get_criterion(cfg).cuda()
 
         # model, optimizer = amp.initialize(model, optimizer, opt_level="O0")
 
         engine.register_state(
-            scheduler=scheduler, model=model, optimizer=optimizer)
+            scheduler=scheduler, model=model, optimizer=optimizer, cfg=cfg)
 
         if engine.distributed:
             print('Distributed training, engine.world_rank={}'.format(engine.world_rank))
@@ -208,12 +137,21 @@ def ding_train(cfg:BaseConfigByEpoch, net=None, train_dataloader=None, val_datal
             print('Single machine multiple GPU training')
             model = torch.nn.parallel.DataParallel(model)
 
+        if tensorflow_style_init:
+            for k, v in model.named_parameters():
+                if v.dim() in [2, 4]:
+                    torch.nn.init.xavier_uniform_(v)
+                    print('init {} as xavier_uniform'.format(k))
+                if 'bias' in k and 'bn' not in k.lower():
+                    torch.nn.init.zeros_(v)
+                    print('init {} as zero'.format(k))
+
+
         if cfg.init_weights:
-            engine.load_checkpoint(cfg.init_weights, is_restore=True)
+            engine.load_checkpoint(cfg.init_weights)
 
         if init_hdf5:
             engine.load_hdf5(init_hdf5)
-
 
         if show_variables:
             engine.show_variables()
@@ -236,10 +174,11 @@ def ding_train(cfg:BaseConfigByEpoch, net=None, train_dataloader=None, val_datal
 
         engine.save_hdf5(os.path.join(cfg.output_dir, 'init.hdf5'))
 
-        # summary(model=model, input_size=(224, 224) if cfg.dataset_name == 'imagenet' else (32, 32), batch_size=cfg.global_batch_size)
-
         recorded_train_time = 0
         recorded_train_examples = 0
+
+        collected_train_loss_sum = 0
+        collected_train_loss_count = 0
 
         if gradient_mask is not None:
             gradient_mask_tensor = {}
@@ -297,6 +236,10 @@ def ding_train(cfg:BaseConfigByEpoch, net=None, train_dataloader=None, val_datal
                 top5.update(acc5.item())
                 losses.update(loss.item())
 
+                if epoch >= cfg.max_epochs - COLLECT_TRAIN_LOSS_EPOCHS:
+                    collected_train_loss_sum += loss.item()
+                    collected_train_loss_count += 1
+
                 pbar_dic = OrderedDict()
                 pbar_dic['data-time'] = '{:.2f}'.format(data_time)
                 pbar_dic['cur_iter'] = iteration
@@ -319,12 +262,33 @@ def ding_train(cfg:BaseConfigByEpoch, net=None, train_dataloader=None, val_datal
             if iteration >= max_iters:
                 break
         #   do something after the training
+        if recorded_train_time > 0:
+            exp_per_sec = recorded_train_examples / recorded_train_time
+        else:
+            exp_per_sec = 0
         engine.log(
             'TRAIN speed: from {} to {} iterations, batch_size={}, examples={}, total_net_time={:.4f}, examples/sec={}'
             .format(int(TRAIN_SPEED_START * max_iters), int(TRAIN_SPEED_END * max_iters), cfg.global_batch_size,
-                    recorded_train_examples, recorded_train_time, recorded_train_examples / recorded_train_time))
+                    recorded_train_examples, recorded_train_time, exp_per_sec))
         if cfg.save_weights:
             engine.save_checkpoint(cfg.save_weights)
             print('NOTE: training finished, saved to {}'.format(cfg.save_weights))
         engine.save_hdf5(os.path.join(cfg.output_dir, 'finish.hdf5'))
+        engine.log('TRAIN LOSS collected over last {} epochs: {:.6f}'.format(COLLECT_TRAIN_LOSS_EPOCHS,
+                                                                             collected_train_loss_sum / collected_train_loss_count))
 
+
+
+
+
+
+            # if engine.world_rank == 0:
+            #     if iteration % 20 == 0 or iteration == max_iter:
+            #         # loss_dict = reducke_loss_dict(loss_dict)
+            #         log_str = 'it:%d, lr:%.1e, ' % (
+            #             iteration, optimizer.param_groups[0]["lr"])
+            #         for key in loss_dict:
+            #             tb_writer.add_scalar(
+            #                 key, loss_dict[key].mean(), global_step=iteration)
+            #             log_str += key + ': %.3f, ' % float(loss_dict[key])
+            #         logger.info(log_str)

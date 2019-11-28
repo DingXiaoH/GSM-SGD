@@ -39,7 +39,7 @@ class ConvBuilder(nn.Module):
             track_running_stats = self.BN_track_running_stats
         return nn.BatchNorm2d(num_features=num_features, eps=eps, momentum=momentum, affine=affine, track_running_stats=track_running_stats)
 
-    # def _SubsequentBN2d(self, num_features, eps=None, momentum=None, affine=None, track_running_stats=None):
+    # def _succeedingBN2d(self, num_features, eps=None, momentum=None, affine=None, track_running_stats=None):
     #     return self._BatchNorm2d(num_features=num_features, eps=eps, momentum=momentum, affine=affine, track_running_stats=track_running_stats)
     #
     # def SeparateBN2d(self, num_features, eps=None, momentum=None, affine=None, track_running_stats=None):
@@ -84,7 +84,7 @@ class ConvBuilder(nn.Module):
     def Identity(self):
         return nn.Identity()
 
-    def ResIdentity(self):
+    def ResIdentity(self, num_channels):
         return nn.Identity()
 
     def Dropout(self, keep_prob):
@@ -93,8 +93,18 @@ class ConvBuilder(nn.Module):
     def Maxpool2d(self, kernel_size, stride=None):
         return nn.MaxPool2d(kernel_size=kernel_size, stride=stride)
 
+    def Avgpool2d(self, kernel_size, stride=None):
+        return nn.AvgPool2d(kernel_size=kernel_size, stride=stride)
+
     def Flatten(self):
         return FlattenLayer()
+
+    def GAP(self, kernel_size):
+        gap = nn.Sequential()
+        gap.add_module('avg', nn.AvgPool2d(kernel_size=kernel_size, stride=kernel_size))
+        gap.add_module('flatten', FlattenLayer())
+        return gap
+
 
 
     def relu(self, in_features):
