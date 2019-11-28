@@ -5,8 +5,8 @@ This repository contains the codes for the following NeurIPS-2019 paper
 [Global Sparse Momentum SGD for Pruning Very Deep Neural Networks](https://arxiv.org/pdf/1909.12778.pdf).
 
 This demo will show you how to
-A. Prune a ResNet-56, get a global compression ratio of 10X (90% of the parameters are zeros).
-B. Find the winning tickets of LeNet-300-100 by 60X pruning together with LeNet-5 by 125X and 300X, and compare the final results with simple magnitude-based pruning [Frankle, J., & Carbin, M. (2018). The lottery ticket hypothesis: Finding sparse, trainable neural networks. arXiv preprint arXiv:1803.03635.].
+1. Prune a ResNet-56, get a global compression ratio of 10X (90% of the parameters are zeros).
+2. Find the winning tickets of LeNet-300-100 by 60X pruning together with LeNet-5 by 125X and 300X, and compare the final results with simple magnitude-based pruning [Frankle, J., & Carbin, M. (2018). The lottery ticket hypothesis: Finding sparse, trainable neural networks. arXiv preprint arXiv:1803.03635.].
 
 The codes are based on PyTorch 1.1.
 
