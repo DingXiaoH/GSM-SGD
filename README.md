@@ -4,9 +4,13 @@ This repository contains the codes for the following NeurIPS-2019 paper
 
 [Global Sparse Momentum SGD for Pruning Very Deep Neural Networks](https://arxiv.org/pdf/1909.12778.pdf).
 
+This demo will show you how to
+1. Prune a ResNet-56, get a global compression ratio of 10X (90% of the parameters are zeros).
+2. Find the winning tickets of LeNet-300-100 by 60X pruning together with LeNet-5 by 125X and 300X, and compare the final results with simple magnitude-based pruning [Frankle, J., & Carbin, M. (2018). The lottery ticket hypothesis: Finding sparse, trainable neural networks. arXiv preprint arXiv:1803.03635.].
+
 The codes are based on PyTorch 1.1.
 
-The experiments reported in the paper were performed using Tensorflow. However, the backbone of the codes was refactored from the official Tensorflow benchmark (https://github.com/tensorflow/benchmarks/tree/master/scripts/tf_cnn_benchmarks), which was designed in the pursuit of extreme speed, not readability.
+The experiments reported in the paper were performed using Tensorflow. However, the backbone of the codes was refactored from the official Tensorflow benchmark (https://github.com/tensorflow/benchmarks/tree/master/scripts/tf_cnn_benchmarks), which was designed in the pursuit of extreme speed, not readability. So I decided to re-implement it in PyTorch to save time for both readers and me.
 
 Citation:
 
@@ -23,25 +27,34 @@ Deep Neural Network (DNN) is powerful but computationally expensive and memory i
 
 ## Example Usage
   
-This repo holds the example codes for the experiments of finding the winning lottery tickets [Frankle, J., & Carbin, M. (2018). The lottery ticket hypothesis: Finding sparse, trainable neural networks. arXiv preprint arXiv:1803.03635.] by GSM.
+This repo holds the example codes for the experiments of finding the winning lottery tickets  by GSM.
 
-1. Install PyTorch 1.1
-
-2. Train a LeNet-5 on MNIST, find the winning tickets by magnitude or by GSM, and train the tickets.
+1. Install PyTorch 1.1. Clone this repo and enter the directory. Modify PYTHONPATH or you will get an ImportError.
 ```
-python gsm/gsm_lottery_ticket_lenet5.py
-```
-3. Check the accuracy of winning tickets training.
-```
-cat gsm_lottery_ticket_exps/lottery_lenet5_warmup5_compress300_magnitude_retrain/log.txt
-cat gsm_lottery_ticket_exps/lottery_lenet5_warmup5_compress300_gsm_retrain/log.txt
+export PYTHONPATH='WHERE_YOU_CLONED_THIS_REPO'
 ```
 
+2. Modify 'CIFAR10_PATH' and 'MNIST_PATH' in dataset.py to the directory of your CIFAR-10 and MNIST datasets. If the datasets are not found, they will be automatically downloaded. 
 
-## TODOs. 
-1. Test the codes thoroughly. There may be some bugs due to my misunderstanding of PyTorch (especially the codes of calculating, transforming and applying gradients). There is also a gap between the results and those reported in the paper using Tensorflow. Learning rate warmup may be the cause. But it is still clear that GSM finds better winning tickets than magnitude-pruning.
-2. Support more networks.
+3. Train a ResNet-56 and prune it by 10X via Global Sparse Momentum. The model will be tested every two epochs. Check the average accuracy in the last ten evaluations. Check the sparsity of the pruned model.
+```
+python gsm/gsm_rc56.py
+python show_log.py
+python display_hdf5.py gsm_exps/rc56_gsm/finish_pruned.hdf5
+```
 
+4. Initialize and train a LeNet-300-100, find the 1/60 winning tickets by GSM and magnitude-based pruning, respectively, and train the winning tickets. Check the final accuracy.
+```
+python gsm/gsm_lottery_ticket_lenet300.py 60
+python show_log.py | grep retrain
+```
+
+5. Initialize and train a LeNet-5, find the 1/125 and 1/300 winning tickets by GSM and magnitude-based pruning, respectively, and train the winning tickets. Check the final accuracy.
+```
+python gsm/gsm_lottery_ticket_lenet5.py 125
+python gsm/gsm_lottery_ticket_lenet5.py 300
+python show_log.py | grep retrain
+```
 
 ## Contact
 dxh17@mails.tsinghua.edu.cn
