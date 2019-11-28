@@ -14,7 +14,6 @@ import time
 from builder import ConvBuilder
 from utils.lr_scheduler import WarmupMultiStepLR, WarmupLinearLR
 import os
-from pytorchsummary import summary
 
 SPEED_TEST_SAMPLE_IGNORE_RATIO = 0.5
 TRAIN_SPEED_START = 0.1
