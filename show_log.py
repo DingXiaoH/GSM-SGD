@@ -17,7 +17,7 @@ def parse_top1_top5_loss_from_log_line(log_line):
     return top1, top5, loss
 
 
-root_dirs = ['mwd_exps', 'mwd_exps_local', 'mwd_exps_old']
+root_dirs = ['gsm_lottery_ticket_exps', 'gsm_exps']
 num_logs = 10
 
 log_files = []
