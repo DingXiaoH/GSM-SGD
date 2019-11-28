@@ -13,6 +13,7 @@ The codes are based on PyTorch 1.1.
 The experiments reported in the paper were performed using Tensorflow. However, the backbone of the codes was refactored from the official Tensorflow benchmark (https://github.com/tensorflow/benchmarks/tree/master/scripts/tf_cnn_benchmarks), which was designed in the pursuit of extreme speed, not readability. So I decided to re-implement it in PyTorch to save time for both readers and me.
 
 Citation:
+
 	@article{ding2019global,
   	title={Global Sparse Momentum SGD for Pruning Very Deep Neural Networks},
   	author={Ding, Xiaohan and Ding, Guiguang and Zhou, Xiangxin and Guo, Yuchen and Liu, Ji and Han, Jungong},
