@@ -10,8 +10,10 @@ class LeNet5(nn.Module):
         self.bd = builder
         stem = builder.Sequential()
         stem.add_module('conv1', builder.Conv2d(in_channels=1, out_channels=LENET5_DEPS[0], kernel_size=5, bias=True))
+        stem.add_module('relu1', builder.ReLU())
         stem.add_module('maxpool1', builder.Maxpool2d(kernel_size=2))
         stem.add_module('conv2', builder.Conv2d(in_channels=LENET5_DEPS[0], out_channels=LENET5_DEPS[1], kernel_size=5, bias=True))
+        stem.add_module('relu2', builder.ReLU())
         stem.add_module('maxpool2', builder.Maxpool2d(kernel_size=2))
         self.stem = stem
         self.flatten = builder.Flatten()
