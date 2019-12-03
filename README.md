@@ -2,7 +2,7 @@
 
 This repository contains the codes for the following NeurIPS-2019 paper 
 
-[Global Sparse Momentum SGD for Pruning Very Deep Neural Networks](https://arxiv.org/pdf/1909.12778.pdf).
+[Global Sparse Momentum SGD for Pruning Very Deep Neural Networks](http://papers.nips.cc/paper/8867-global-sparse-momentum-sgd-for-pruning-very-deep-neural-networks.pdf).
 
 This demo will show you how to
 1. Prune a ResNet-56, get a global compression ratio of 10X (90% of the parameters are zeros).
