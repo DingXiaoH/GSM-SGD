@@ -14,13 +14,30 @@ The experiments reported in the paper were performed using Tensorflow. However, 
 
 Citation:
 
-	@inproceedings{ding2019global,
-  	title={Global Sparse Momentum SGD for Pruning Very Deep Neural Networks},
-  	author={Ding, Xiaohan and Zhou, Xiangxin and Guo, Yuchen and Han, Jungong and Liu, Ji and others},
-  	booktitle={Advances in Neural Information Processing Systems},
-  	pages={6379--6391},
-  	year={2019}
-	}
+@inproceedings{DBLP:conf/nips/DingDZGHL19,
+  author    = {Xiaohan Ding and
+               Guiguang Ding and
+               Xiangxin Zhou and
+               Yuchen Guo and
+               Jungong Han and
+               Ji Liu},
+  editor    = {Hanna M. Wallach and
+               Hugo Larochelle and
+               Alina Beygelzimer and
+               Florence d'Alch{\'{e}}{-}Buc and
+               Emily B. Fox and
+               Roman Garnett},
+  title     = {Global Sparse Momentum {SGD} for Pruning Very Deep Neural Networks},
+  booktitle = {Advances in Neural Information Processing Systems 32: Annual Conference
+               on Neural Information Processing Systems 2019, NeurIPS 2019, 8-14
+               December 2019, Vancouver, BC, Canada},
+  pages     = {6379--6391},
+  year      = {2019},
+  url       = {http://papers.nips.cc/paper/8867-global-sparse-momentum-sgd-for-pruning-very-deep-neural-networks},
+  timestamp = {Fri, 06 Mar 2020 17:00:41 +0100},
+  biburl    = {https://dblp.org/rec/conf/nips/DingDZGHL19.bib},
+  bibsource = {dblp computer science bibliography, https://dblp.org}
+}
 
 ## Abstract
 
